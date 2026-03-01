@@ -11,6 +11,20 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// Allowed signup methods (Option A: fixed list). Order in request = display order (first = top).
+var allowedSignupMethods = map[string]bool{
+	"phone": true, "google": true, "email": true, "openai": true,
+}
+
+func validateSignupMethods(methods []string) bool {
+	for _, m := range methods {
+		if !allowedSignupMethods[m] {
+			return false
+		}
+	}
+	return true
+}
+
 // ListPublicCountries handles GET /countries for non-admin consumers.
 func (h *Handlers) ListPublicCountries(c *fiber.Ctx) error {
 	list, err := h.CountryRepo.ListVisible(c.Context())
@@ -46,8 +60,11 @@ func (h *Handlers) CreateCountry(c *fiber.Ctx) error {
 	if in.CountryCode == "" || in.Title == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "country_code and title are required"})
 	}
-	if in.SignupMethod == "" {
-		in.SignupMethod = "email"
+	if len(in.SignupMethods) == 0 {
+		in.SignupMethods = []string{"email"}
+	}
+	if !validateSignupMethods(in.SignupMethods) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "signup_methods may only contain: phone, google, email, openai"})
 	}
 	country, err := h.CountryRepo.Create(c.Context(), in)
 	if err != nil {
@@ -71,6 +88,9 @@ func (h *Handlers) UpdateCountry(c *fiber.Ctx) error {
 	var in domain.UpdateCountryInput
 	if err := c.BodyParser(&in); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON"})
+	}
+	if in.SignupMethods != nil && len(*in.SignupMethods) > 0 && !validateSignupMethods(*in.SignupMethods) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "signup_methods may only contain: phone, google, email, openai"})
 	}
 
 	country, err := h.CountryRepo.Update(c.Context(), id, in)

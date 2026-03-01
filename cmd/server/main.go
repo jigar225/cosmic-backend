@@ -40,6 +40,7 @@ func main() {
 		MediumRepo:      repository.NewMediumRepo(pool),
 		LanguageRepo:    repository.NewLanguageRepo(pool),
 		SubjectRepo:     repository.NewSubjectRepo(pool),
+		BookRepo:        repository.NewBookRepo(pool),
 	}
 	app := transport.NewApp(h)
 

@@ -17,6 +17,7 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handlers) {
 	app.Get("/grade-methods", h.ListGradeMethods)
 	app.Get("/grade-methods/:id/grades", h.ListGradesByMethod)
 	app.Get("/subjects", h.ListSubjects)
+	app.Get("/books", h.ListBooks)
 
 	// Admin: countries
 	app.Get("/admin/countries", h.ListAllCountries)
@@ -59,4 +60,10 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handlers) {
 	app.Post("/admin/subjects", h.CreateSubject)
 	app.Patch("/admin/subjects/:id", h.UpdateSubject)
 	app.Delete("/admin/subjects/:id", h.DeleteSubject)
+
+	// Admin: books
+	app.Get("/admin/books", h.ListAllBooks)
+	app.Post("/admin/books", h.CreateBook)
+	app.Patch("/admin/books/:id", h.UpdateBook)
+	app.Delete("/admin/books/:id", h.DeleteBook)
 }

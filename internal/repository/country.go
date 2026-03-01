@@ -29,8 +29,8 @@ func NewCountryRepo(pool *pgxpool.Pool) *CountryRepo {
 // ListVisible returns only countries marked as visible, ordered by title.
 func (r *CountryRepo) ListVisible(ctx context.Context) ([]domain.Country, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, country_code, title, icon_path, phone_code, signup_method,
-		       have_board, has_states, is_visible, created_at, updated_at
+		SELECT id, country_code, title, phone_code, signup_methods,
+		       have_board, is_visible, created_at
 		FROM countries
 		WHERE is_visible = TRUE
 		ORDER BY title
@@ -47,14 +47,11 @@ func (r *CountryRepo) ListVisible(ctx context.Context) ([]domain.Country, error)
 			&c.ID,
 			&c.CountryCode,
 			&c.Title,
-			&c.IconPath,
 			&c.PhoneCode,
-			&c.SignupMethod,
+			&c.SignupMethods,
 			&c.HaveBoard,
-			&c.HasStates,
 			&c.IsVisible,
 			&c.CreatedAt,
-			&c.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -66,8 +63,8 @@ func (r *CountryRepo) ListVisible(ctx context.Context) ([]domain.Country, error)
 // ListAll returns all countries (visible and hidden), ordered by title.
 func (r *CountryRepo) ListAll(ctx context.Context) ([]domain.Country, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, country_code, title, icon_path, phone_code, signup_method,
-		       have_board, has_states, is_visible, created_at, updated_at
+		SELECT id, country_code, title, phone_code, signup_methods,
+		       have_board, is_visible, created_at
 		FROM countries
 		ORDER BY title
 	`)
@@ -83,14 +80,11 @@ func (r *CountryRepo) ListAll(ctx context.Context) ([]domain.Country, error) {
 			&c.ID,
 			&c.CountryCode,
 			&c.Title,
-			&c.IconPath,
 			&c.PhoneCode,
-			&c.SignupMethod,
+			&c.SignupMethods,
 			&c.HaveBoard,
-			&c.HasStates,
 			&c.IsVisible,
 			&c.CreatedAt,
-			&c.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -113,36 +107,35 @@ func (r *CountryRepo) Create(ctx context.Context, in domain.CreateCountryInput) 
 		return domain.Country{}, err
 	}
 
+	signupMethods := in.SignupMethods
+	if signupMethods == nil {
+		signupMethods = []string{"email"}
+	}
 	var c domain.Country
 	err = r.pool.QueryRow(ctx, `
 		INSERT INTO countries (
-			country_code, title, icon_path, phone_code, signup_method,
-			have_board, has_states, is_visible
+			country_code, title, phone_code, signup_methods,
+			have_board, is_visible
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id, country_code, title, icon_path, phone_code, signup_method,
-		          have_board, has_states, is_visible, created_at, updated_at
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, country_code, title, phone_code, signup_methods,
+		          have_board, is_visible, created_at
 	`,
 		in.CountryCode,
 		in.Title,
-		in.IconPath,
 		in.PhoneCode,
-		in.SignupMethod,
+		signupMethods,
 		in.HaveBoard,
-		in.HasStates,
 		in.IsVisible,
 	).Scan(
 		&c.ID,
 		&c.CountryCode,
 		&c.Title,
-		&c.IconPath,
 		&c.PhoneCode,
-		&c.SignupMethod,
+		&c.SignupMethods,
 		&c.HaveBoard,
-		&c.HasStates,
 		&c.IsVisible,
 		&c.CreatedAt,
-		&c.UpdatedAt,
 	)
 	if err != nil {
 		return domain.Country{}, err
@@ -152,43 +145,39 @@ func (r *CountryRepo) Create(ctx context.Context, in domain.CreateCountryInput) 
 
 // Update applies partial updates to a country row and returns the updated row.
 func (r *CountryRepo) Update(ctx context.Context, id int64, in domain.UpdateCountryInput) (domain.Country, error) {
-	// Build a dynamic update using COALESCE-like semantics by passing through existing values.
+	// When SignupMethods is nil, pass nil so COALESCE keeps existing value.
+	var signupMethodsArg interface{} = nil
+	if in.SignupMethods != nil {
+		signupMethodsArg = *in.SignupMethods
+	}
 	var c domain.Country
 	err := r.pool.QueryRow(ctx, `
 		UPDATE countries
 		SET
 			title = COALESCE($2, title),
-			icon_path = COALESCE($3, icon_path),
-			phone_code = COALESCE($4, phone_code),
-			signup_method = COALESCE($5, signup_method),
-			have_board = COALESCE($6, have_board),
-			has_states = COALESCE($7, has_states),
-			is_visible = COALESCE($8, is_visible),
-			updated_at = CURRENT_TIMESTAMP
+			phone_code = COALESCE($3, phone_code),
+			signup_methods = COALESCE($4::text[], signup_methods),
+			have_board = COALESCE($5, have_board),
+			is_visible = COALESCE($6, is_visible)
 		WHERE id = $1
-		RETURNING id, country_code, title, icon_path, phone_code, signup_method,
-		          have_board, has_states, is_visible, created_at, updated_at
+		RETURNING id, country_code, title, phone_code, signup_methods,
+		          have_board, is_visible, created_at
 	`,
 		id,
 		in.Title,
-		in.IconPath,
 		in.PhoneCode,
-		in.SignupMethod,
+		signupMethodsArg,
 		in.HaveBoard,
-		in.HasStates,
 		in.IsVisible,
 	).Scan(
 		&c.ID,
 		&c.CountryCode,
 		&c.Title,
-		&c.IconPath,
 		&c.PhoneCode,
-		&c.SignupMethod,
+		&c.SignupMethods,
 		&c.HaveBoard,
-		&c.HasStates,
 		&c.IsVisible,
 		&c.CreatedAt,
-		&c.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

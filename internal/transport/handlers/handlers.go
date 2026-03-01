@@ -11,4 +11,5 @@ type Handlers struct {
 	MediumRepo      *repository.MediumRepo
 	LanguageRepo    *repository.LanguageRepo
 	SubjectRepo     *repository.SubjectRepo
+	BookRepo        *repository.BookRepo
 }
