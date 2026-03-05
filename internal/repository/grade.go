@@ -30,8 +30,7 @@ func NewGradeRepo(pool *pgxpool.Pool) *GradeRepo {
 // ListByGradeMethod returns all grades for a grade method (visible only by default).
 func (r *GradeRepo) ListByGradeMethod(ctx context.Context, gradeMethodID int64, visibleOnly bool) ([]domain.Grade, error) {
 	query := `
-		SELECT id, grade_method_id, title, display_order, numeric_equivalent,
-		       age_range_start, age_range_end, academic_stage, is_visible, created_at
+		SELECT id, grade_method_id, title, age_range_start, age_range_end, is_visible, created_at
 		FROM grades
 		WHERE grade_method_id = $1
 	`
@@ -39,7 +38,7 @@ func (r *GradeRepo) ListByGradeMethod(ctx context.Context, gradeMethodID int64, 
 	if visibleOnly {
 		query += " AND is_visible = true"
 	}
-	query += " ORDER BY display_order, id"
+	query += " ORDER BY title, id"
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -54,11 +53,8 @@ func (r *GradeRepo) ListByGradeMethod(ctx context.Context, gradeMethodID int64, 
 			&g.ID,
 			&g.GradeMethodID,
 			&g.Title,
-			&g.DisplayOrder,
-			&g.NumericEquivalent,
 			&g.AgeRangeStart,
 			&g.AgeRangeEnd,
-			&g.AcademicStage,
 			&g.IsVisible,
 			&g.CreatedAt,
 		); err != nil {
@@ -72,8 +68,7 @@ func (r *GradeRepo) ListByGradeMethod(ctx context.Context, gradeMethodID int64, 
 // ListAll returns all grades (admin). Optional filter by gradeMethodID when >0.
 func (r *GradeRepo) ListAll(ctx context.Context, gradeMethodID *int64) ([]domain.Grade, error) {
 	query := `
-		SELECT id, grade_method_id, title, display_order, numeric_equivalent,
-		       age_range_start, age_range_end, academic_stage, is_visible, created_at
+		SELECT id, grade_method_id, title, age_range_start, age_range_end, is_visible, created_at
 		FROM grades
 		WHERE 1=1
 	`
@@ -84,7 +79,7 @@ func (r *GradeRepo) ListAll(ctx context.Context, gradeMethodID *int64) ([]domain
 		args = append(args, *gradeMethodID)
 		n++
 	}
-	query += " ORDER BY grade_method_id, display_order, id"
+	query += " ORDER BY grade_method_id, title, id"
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -99,11 +94,8 @@ func (r *GradeRepo) ListAll(ctx context.Context, gradeMethodID *int64) ([]domain
 			&g.ID,
 			&g.GradeMethodID,
 			&g.Title,
-			&g.DisplayOrder,
-			&g.NumericEquivalent,
 			&g.AgeRangeStart,
 			&g.AgeRangeEnd,
-			&g.AcademicStage,
 			&g.IsVisible,
 			&g.CreatedAt,
 		); err != nil {
@@ -129,31 +121,21 @@ func (r *GradeRepo) Create(ctx context.Context, in domain.CreateGradeInput) (dom
 
 	var g domain.Grade
 	err = r.pool.QueryRow(ctx, `
-		INSERT INTO grades (
-			grade_method_id, title, display_order, numeric_equivalent,
-			age_range_start, age_range_end, academic_stage, is_visible
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id, grade_method_id, title, display_order, numeric_equivalent,
-		          age_range_start, age_range_end, academic_stage, is_visible, created_at
+		INSERT INTO grades (grade_method_id, title, age_range_start, age_range_end, is_visible)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, grade_method_id, title, age_range_start, age_range_end, is_visible, created_at
 	`,
 		in.GradeMethodID,
 		in.Title,
-		in.DisplayOrder,
-		in.NumericEquivalent,
 		in.AgeRangeStart,
 		in.AgeRangeEnd,
-		in.AcademicStage,
 		in.IsVisible,
 	).Scan(
 		&g.ID,
 		&g.GradeMethodID,
 		&g.Title,
-		&g.DisplayOrder,
-		&g.NumericEquivalent,
 		&g.AgeRangeStart,
 		&g.AgeRangeEnd,
-		&g.AcademicStage,
 		&g.IsVisible,
 		&g.CreatedAt,
 	)
@@ -167,18 +149,14 @@ func (r *GradeRepo) Create(ctx context.Context, in domain.CreateGradeInput) (dom
 func (r *GradeRepo) GetByID(ctx context.Context, id int64) (domain.Grade, error) {
 	var g domain.Grade
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, grade_method_id, title, display_order, numeric_equivalent,
-		       age_range_start, age_range_end, academic_stage, is_visible, created_at
+		SELECT id, grade_method_id, title, age_range_start, age_range_end, is_visible, created_at
 		FROM grades WHERE id = $1
 	`, id).Scan(
 		&g.ID,
 		&g.GradeMethodID,
 		&g.Title,
-		&g.DisplayOrder,
-		&g.NumericEquivalent,
 		&g.AgeRangeStart,
 		&g.AgeRangeEnd,
-		&g.AcademicStage,
 		&g.IsVisible,
 		&g.CreatedAt,
 	)
@@ -198,33 +176,23 @@ func (r *GradeRepo) Update(ctx context.Context, id int64, in domain.UpdateGradeI
 		UPDATE grades
 		SET
 			title = COALESCE($2, title),
-			display_order = COALESCE($3, display_order),
-			numeric_equivalent = COALESCE($4, numeric_equivalent),
-			age_range_start = COALESCE($5, age_range_start),
-			age_range_end = COALESCE($6, age_range_end),
-			academic_stage = COALESCE($7, academic_stage),
-			is_visible = COALESCE($8, is_visible)
+			age_range_start = COALESCE($3, age_range_start),
+			age_range_end = COALESCE($4, age_range_end),
+			is_visible = COALESCE($5, is_visible)
 		WHERE id = $1
-		RETURNING id, grade_method_id, title, display_order, numeric_equivalent,
-		          age_range_start, age_range_end, academic_stage, is_visible, created_at
+		RETURNING id, grade_method_id, title, age_range_start, age_range_end, is_visible, created_at
 	`,
 		id,
 		in.Title,
-		in.DisplayOrder,
-		in.NumericEquivalent,
 		in.AgeRangeStart,
 		in.AgeRangeEnd,
-		in.AcademicStage,
 		in.IsVisible,
 	).Scan(
 		&g.ID,
 		&g.GradeMethodID,
 		&g.Title,
-		&g.DisplayOrder,
-		&g.NumericEquivalent,
 		&g.AgeRangeStart,
 		&g.AgeRangeEnd,
-		&g.AcademicStage,
 		&g.IsVisible,
 		&g.CreatedAt,
 	)
@@ -244,8 +212,7 @@ func (r *GradeRepo) Delete(ctx context.Context, id int64) error {
 	err := r.pool.QueryRow(ctx, `
 		SELECT (
 			(SELECT COUNT(*) FROM subjects WHERE grade_id = $1) +
-			(SELECT COUNT(*) FROM books WHERE grade_id = $1) +
-			(SELECT COUNT(*) FROM user_context WHERE current_grade_id = $1) +
+			(SELECT COUNT(*) FROM user_default WHERE current_grade_id = $1) +
 			(SELECT COUNT(*) FROM generated_content WHERE grade_id = $1)
 		) AS dependents
 	`, id).Scan(&count)

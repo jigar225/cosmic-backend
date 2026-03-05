@@ -11,16 +11,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// ListSubjects handles GET /subjects?country_id=&board_id=&medium_id=&grade_id= (public: visible only).
+// ListSubjects handles GET /subjects?board_id=&medium_id=&grade_id= (public: visible only). board_id is required.
 func (h *Handlers) ListSubjects(c *fiber.Ctx) error {
-	countryStr := c.Query("country_id")
 	boardStr := c.Query("board_id")
-	if countryStr == "" || boardStr == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "country_id and board_id are required"})
-	}
-	countryID, err := strconv.ParseInt(countryStr, 10, 64)
-	if err != nil || countryID <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid country_id"})
+	if boardStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "board_id is required"})
 	}
 	boardID, err := strconv.ParseInt(boardStr, 10, 64)
 	if err != nil || boardID <= 0 {
@@ -44,7 +39,7 @@ func (h *Handlers) ListSubjects(c *fiber.Ctx) error {
 		gradeID = &id
 	}
 
-	list, err := h.SubjectRepo.ListVisible(c.Context(), countryID, boardID, mediumID, gradeID)
+	list, err := h.SubjectRepo.ListVisible(c.Context(), boardID, mediumID, gradeID)
 	if err != nil {
 		log.Printf("subjects list visible: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list subjects"})
@@ -55,20 +50,12 @@ func (h *Handlers) ListSubjects(c *fiber.Ctx) error {
 	return c.JSON(list)
 }
 
-// ListAllSubjects handles GET /admin/subjects with optional filters.
+// ListAllSubjects handles GET /admin/subjects with optional filters (board_id, medium_id, grade_id).
 func (h *Handlers) ListAllSubjects(c *fiber.Ctx) error {
-	var countryID *int64
 	var boardID *int64
 	var mediumID *int64
 	var gradeID *int64
 
-	if cs := c.Query("country_id"); cs != "" {
-		id, err := strconv.ParseInt(cs, 10, 64)
-		if err != nil || id <= 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid country_id"})
-		}
-		countryID = &id
-	}
 	if bs := c.Query("board_id"); bs != "" {
 		id, err := strconv.ParseInt(bs, 10, 64)
 		if err != nil || id <= 0 {
@@ -91,7 +78,7 @@ func (h *Handlers) ListAllSubjects(c *fiber.Ctx) error {
 		gradeID = &id
 	}
 
-	list, err := h.SubjectRepo.ListAll(c.Context(), countryID, boardID, mediumID, gradeID)
+	list, err := h.SubjectRepo.ListAll(c.Context(), boardID, mediumID, gradeID)
 	if err != nil {
 		log.Printf("subjects list all: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list subjects"})
@@ -108,24 +95,30 @@ func (h *Handlers) CreateSubject(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON"})
 	}
-	if in.CountryID <= 0 || in.BoardID <= 0 || in.MediumID <= 0 || in.GradeID <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "country_id, board_id, medium_id, and grade_id are required and must be positive"})
+	if in.BoardID <= 0 || in.MediumID <= 0 || in.GradeID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "board_id, medium_id, and grade_id are required and must be positive"})
 	}
 	if in.Title == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "title is required"})
 	}
-	if in.SubjectType == "" {
-		in.SubjectType = "core"
-	}
 	s, err := h.SubjectRepo.Create(c.Context(), in)
 	if err != nil {
 		if errors.Is(err, repository.ErrSubjectConflict) {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "a subject with this title already exists for this country/board/medium/grade"})
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "a subject with this title already exists for this board/medium/grade"})
 		}
 		log.Printf("subjects create: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create subject"})
 	}
-	return c.Status(fiber.StatusCreated).JSON(s)
+	// Create a default "unit" book for this subject (created_by = NULL) so admin can upload chapters to it.
+	defaultBookID, err := h.BookRepo.CreateDefaultForSubject(c.Context(), s.ID, s.Title)
+	if err != nil {
+		log.Printf("subjects create: failed to create default book for subject %d: %v", s.ID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "subject created but failed to create default book for chapters"})
+	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"subject":         s,
+		"default_book_id": defaultBookID,
+	})
 }
 
 // UpdateSubject handles PATCH /admin/subjects/:id.

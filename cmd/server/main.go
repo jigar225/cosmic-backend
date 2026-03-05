@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"back_testing/internal/repository"
+	"back_testing/internal/storage"
 	"back_testing/internal/transport"
 	"back_testing/internal/transport/handlers"
 
@@ -32,6 +33,12 @@ func main() {
 	}
 	log.Println("Migrations applied.")
 
+	s3Uploader, err := storage.NewS3Uploader(storage.S3FromEnv())
+	if err != nil {
+		log.Printf("warning: S3 uploader init failed (chapter PDF uploads disabled): %v", err)
+		s3Uploader, _ = storage.NewS3Uploader(storage.S3Config{}) // no-op when not configured
+	}
+
 	h := &handlers.Handlers{
 		BoardRepo:       repository.NewBoardRepo(pool),
 		CountryRepo:     repository.NewCountryRepo(pool),
@@ -41,6 +48,8 @@ func main() {
 		LanguageRepo:    repository.NewLanguageRepo(pool),
 		SubjectRepo:     repository.NewSubjectRepo(pool),
 		BookRepo:        repository.NewBookRepo(pool),
+		ChapterRepo:     repository.NewChapterRepo(pool),
+		S3Uploader:      s3Uploader,
 	}
 	app := transport.NewApp(h)
 

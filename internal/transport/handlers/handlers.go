@@ -1,6 +1,9 @@
 package handlers
 
-import "back_testing/internal/repository"
+import (
+	"back_testing/internal/repository"
+	"back_testing/internal/storage"
+)
 
 // Handlers holds dependencies for HTTP handlers (DB, uploader, etc.).
 type Handlers struct {
@@ -12,4 +15,6 @@ type Handlers struct {
 	LanguageRepo    *repository.LanguageRepo
 	SubjectRepo     *repository.SubjectRepo
 	BookRepo        *repository.BookRepo
+	ChapterRepo     *repository.ChapterRepo
+	S3Uploader      *storage.S3Uploader
 }

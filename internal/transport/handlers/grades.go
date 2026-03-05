@@ -62,9 +62,6 @@ func (h *Handlers) CreateGrade(c *fiber.Ctx) error {
 	if in.Title == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "title is required"})
 	}
-	if in.DisplayOrder == 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "display_order is required and must be non-zero"})
-	}
 	g, err := h.GradeRepo.Create(c.Context(), in)
 	if err != nil {
 		if errors.Is(err, repository.ErrGradeConflict) {

@@ -44,7 +44,7 @@ func (r *BoardRepo) ListAll(ctx context.Context, countryID *int64) ([]domain.Boa
 
 func (r *BoardRepo) list(ctx context.Context, countryID *int64, visibleOnly bool) ([]domain.Board, error) {
 	query := `
-		SELECT id, country_id, title, grade_method_id, is_visible, created_at, updated_at
+		SELECT id, country_id, title, grade_method_id, is_visible, created_at
 		FROM boards
 		WHERE 1=1
 	`
@@ -68,7 +68,7 @@ func (r *BoardRepo) list(ctx context.Context, countryID *int64, visibleOnly bool
 	var out []domain.Board
 	for rows.Next() {
 		var b domain.Board
-		if err := rows.Scan(&b.ID, &b.CountryID, &b.Title, &b.GradeMethodID, &b.IsVisible, &b.CreatedAt, &b.UpdatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.CountryID, &b.Title, &b.GradeMethodID, &b.IsVisible, &b.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, b)
@@ -91,9 +91,9 @@ func (r *BoardRepo) Create(ctx context.Context, in domain.CreateBoardInput) (dom
 	err = r.pool.QueryRow(ctx, `
 		INSERT INTO boards (country_id, title, grade_method_id, is_visible)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, country_id, title, grade_method_id, is_visible, created_at, updated_at
+		RETURNING id, country_id, title, grade_method_id, is_visible, created_at
 	`, in.CountryID, in.Title, in.GradeMethodID, in.IsVisible).Scan(
-		&b.ID, &b.CountryID, &b.Title, &b.GradeMethodID, &b.IsVisible, &b.CreatedAt, &b.UpdatedAt,
+		&b.ID, &b.CountryID, &b.Title, &b.GradeMethodID, &b.IsVisible, &b.CreatedAt,
 	)
 	if err != nil {
 		return domain.Board{}, err
@@ -105,9 +105,9 @@ func (r *BoardRepo) Create(ctx context.Context, in domain.CreateBoardInput) (dom
 func (r *BoardRepo) GetByID(ctx context.Context, id int64) (domain.Board, error) {
 	var b domain.Board
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, country_id, title, grade_method_id, is_visible, created_at, updated_at
+		SELECT id, country_id, title, grade_method_id, is_visible, created_at
 		FROM boards WHERE id = $1
-	`, id).Scan(&b.ID, &b.CountryID, &b.Title, &b.GradeMethodID, &b.IsVisible, &b.CreatedAt, &b.UpdatedAt)
+	`, id).Scan(&b.ID, &b.CountryID, &b.Title, &b.GradeMethodID, &b.IsVisible, &b.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Board{}, ErrBoardNotFound
@@ -123,10 +123,9 @@ func (r *BoardRepo) Delete(ctx context.Context, id int64) error {
 	var count int
 	err := r.pool.QueryRow(ctx, `
 		SELECT (
-			(SELECT COUNT(*) FROM states WHERE default_board_id = $1) +
 			(SELECT COUNT(*) FROM mediums WHERE board_id = $1) +
 			(SELECT COUNT(*) FROM subjects WHERE board_id = $1) +
-			(SELECT COUNT(*) FROM user_context WHERE current_board_id = $1) +
+			(SELECT COUNT(*) FROM user_default WHERE current_board_id = $1) +
 			(SELECT COUNT(*) FROM generated_content WHERE board_id = $1)
 		) AS dependents
 	`, id).Scan(&count)
@@ -154,12 +153,11 @@ func (r *BoardRepo) Update(ctx context.Context, id int64, in domain.UpdateBoardI
 		SET
 			title = COALESCE($2, title),
 			grade_method_id = COALESCE($3, grade_method_id),
-			is_visible = COALESCE($4, is_visible),
-			updated_at = CURRENT_TIMESTAMP
+			is_visible = COALESCE($4, is_visible)
 		WHERE id = $1
-		RETURNING id, country_id, title, grade_method_id, is_visible, created_at, updated_at
+		RETURNING id, country_id, title, grade_method_id, is_visible, created_at
 	`, id, in.Title, in.GradeMethodID, in.IsVisible).Scan(
-		&b.ID, &b.CountryID, &b.Title, &b.GradeMethodID, &b.IsVisible, &b.CreatedAt, &b.UpdatedAt,
+		&b.ID, &b.CountryID, &b.Title, &b.GradeMethodID, &b.IsVisible, &b.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
