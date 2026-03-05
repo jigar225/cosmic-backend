@@ -280,7 +280,7 @@ func (r *MediumRepo) Delete(ctx context.Context, id int64) error {
 		SELECT (
 			(SELECT COUNT(*) FROM subjects WHERE medium_id = $1) +
 			(SELECT COUNT(*) FROM books WHERE medium_id = $1) +
-			(SELECT COUNT(*) FROM user_context WHERE current_medium_id = $1) +
+			(SELECT COUNT(*) FROM user_default WHERE current_medium_id = $1) +
 			(SELECT COUNT(*) FROM generated_content WHERE medium_id = $1)
 		) AS dependents
 	`, id).Scan(&count)

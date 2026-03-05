@@ -100,6 +100,11 @@ func (h *Handlers) CreateChapter(c *fiber.Ctx) error {
 		FilePath:     key,
 		IsVisible:    true,
 	}
+	if orderStr := strings.TrimSpace(strings.Join(form.Value["display_order"], "")); orderStr != "" {
+		if orderVal, err := strconv.Atoi(orderStr); err == nil && orderVal >= 0 {
+			in.DisplayOrder = &orderVal
+		}
+	}
 	ch, err := h.ChapterRepo.Create(c.Context(), in)
 	if err != nil {
 		log.Printf("chapters create: db insert: %v", err)
@@ -107,6 +112,26 @@ func (h *Handlers) CreateChapter(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"chapter": ch})
+}
+
+// DeleteChapter handles DELETE /admin/chapters/:id.
+func (h *Handlers) DeleteChapter(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid chapter id"})
+	}
+	if err := h.ChapterRepo.Delete(c.Context(), id); err != nil {
+		if errors.Is(err, repository.ErrChapterNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "chapter not found"})
+		}
+		if errors.Is(err, repository.ErrChapterHasDependents) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "chapter cannot be deleted: it has generated content"})
+		}
+		log.Printf("chapters delete: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete chapter"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // GetChapterDownloadURL handles GET /admin/chapters/:id/download-url.
