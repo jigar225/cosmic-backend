@@ -119,6 +119,33 @@ func (r *ChapterRepo) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+// UpdateFilePath updates the S3 file_path for an existing chapter.
+func (r *ChapterRepo) UpdateFilePath(ctx context.Context, id int64, filePath string) (domain.Chapter, error) {
+	var ch domain.Chapter
+	err := r.pool.QueryRow(ctx, `
+		UPDATE chapters SET file_path = $1
+		WHERE id = $2
+		RETURNING id, book_id, chapter_title, COALESCE(file_path, '') AS file_path,
+		          content_summary, display_order, is_visible, created_at
+	`, filePath, id).Scan(
+		&ch.ID,
+		&ch.BookID,
+		&ch.ChapterTitle,
+		&ch.FilePath,
+		&ch.ContentSummary,
+		&ch.DisplayOrder,
+		&ch.IsVisible,
+		&ch.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Chapter{}, ErrChapterNotFound
+		}
+		return domain.Chapter{}, err
+	}
+	return ch, nil
+}
+
 // GetByID returns a chapter by id.
 func (r *ChapterRepo) GetByID(ctx context.Context, id int64) (domain.Chapter, error) {
 	var ch domain.Chapter

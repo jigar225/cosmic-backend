@@ -16,5 +16,6 @@ type Handlers struct {
 	SubjectRepo     *repository.SubjectRepo
 	BookRepo        *repository.BookRepo
 	ChapterRepo     *repository.ChapterRepo
+	ProgressRepo    *repository.ProgressRepo
 	S3Uploader      *storage.S3Uploader
 }

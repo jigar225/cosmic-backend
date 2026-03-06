@@ -49,6 +49,7 @@ func main() {
 		SubjectRepo:     repository.NewSubjectRepo(pool),
 		BookRepo:        repository.NewBookRepo(pool),
 		ChapterRepo:     repository.NewChapterRepo(pool),
+		ProgressRepo:    repository.NewProgressRepo(pool),
 		S3Uploader:      s3Uploader,
 	}
 	app := transport.NewApp(h)

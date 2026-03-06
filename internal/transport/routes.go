@@ -67,9 +67,13 @@ func RegisterRoutes(app *fiber.App, h *handlers.Handlers) {
 	app.Patch("/admin/books/:id", h.UpdateBook)
 	app.Delete("/admin/books/:id", h.DeleteBook)
 
+	// Admin: progress tree
+	app.Get("/admin/progress/tree", h.GetProgressTree)
+
 	// Admin: chapters (PDF upload to S3)
 	app.Get("/admin/books/:book_id/chapters", h.ListChapters)
 	app.Post("/admin/books/:book_id/chapters", h.CreateChapter)
+	app.Patch("/admin/chapters/:id", h.UpdateChapterPdf)
 	app.Delete("/admin/chapters/:id", h.DeleteChapter)
 	app.Get("/admin/chapters/:id/download-url", h.GetChapterDownloadURL)
 }
