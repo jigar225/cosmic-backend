@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"back_testing/internal/repository"
 	"back_testing/internal/storage"
@@ -40,16 +41,25 @@ func main() {
 	}
 
 	h := &handlers.Handlers{
-		BoardRepo:       repository.NewBoardRepo(pool),
-		CountryRepo:     repository.NewCountryRepo(pool),
-		GradeMethodRepo: repository.NewGradeMethodRepo(pool),
-		GradeRepo:       repository.NewGradeRepo(pool),
-		MediumRepo:      repository.NewMediumRepo(pool),
-		LanguageRepo:    repository.NewLanguageRepo(pool),
-		SubjectRepo:     repository.NewSubjectRepo(pool),
-		BookRepo:        repository.NewBookRepo(pool),
-		ChapterRepo:     repository.NewChapterRepo(pool),
-		S3Uploader:      s3Uploader,
+		BoardRepo:        repository.NewBoardRepo(pool),
+		CountryRepo:      repository.NewCountryRepo(pool),
+		GradeMethodRepo:  repository.NewGradeMethodRepo(pool),
+		GradeRepo:        repository.NewGradeRepo(pool),
+		MediumRepo:       repository.NewMediumRepo(pool),
+		LanguageRepo:     repository.NewLanguageRepo(pool),
+		SubjectRepo:      repository.NewSubjectRepo(pool),
+		BookRepo:         repository.NewBookRepo(pool),
+		ChapterRepo:      repository.NewChapterRepo(pool),
+		S3Uploader:       s3Uploader,
+		UserRepo:         repository.NewUserRepo(pool),
+		RefreshTokenRepo: repository.NewRefreshTokenRepo(pool),
+	}
+	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		h.AuthConfig = &handlers.AuthConfig{
+			JWTSecret:     []byte(secret),
+			AccessExpiry:  3 * time.Minute,
+			RefreshExpiry: 30 * 24 * time.Hour, // 30 days
+		}
 	}
 	app := transport.NewApp(h)
 
