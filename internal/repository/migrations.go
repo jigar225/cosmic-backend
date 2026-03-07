@@ -3,7 +3,6 @@ package repository
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -17,13 +16,8 @@ func RunMigrations() error {
 	if url == "" {
 		url = DefaultDatabaseURL
 	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("getwd: %w", err)
-	}
-	migrationsPath := filepath.Join(dir, "internal", "migrations")
 	m, err := migrate.New(
-		"file://"+migrationsPath,
+		"file://internal/migrations",
 		url,
 	)
 	if err != nil {
@@ -42,13 +36,8 @@ func RollbackMigrations() error {
 	if url == "" {
 		url = DefaultDatabaseURL
 	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("getwd: %w", err)
-	}
-	migrationsPath := filepath.Join(dir, "internal", "migrations")
 	m, err := migrate.New(
-		"file://"+migrationsPath,
+		"file://internal/migrations",
 		url,
 	)
 	if err != nil {

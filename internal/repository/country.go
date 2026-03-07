@@ -26,15 +26,29 @@ func NewCountryRepo(pool *pgxpool.Pool) *CountryRepo {
 	return &CountryRepo{pool: pool}
 }
 
+const countrySelectCols = `id, country_code, title, phone_code, signup_methods,
+		have_board, has_states, is_visible, created_at`
+
+func scanCountry(row interface{ Scan(...any) error }) (domain.Country, error) {
+	var c domain.Country
+	err := row.Scan(
+		&c.ID,
+		&c.CountryCode,
+		&c.Title,
+		&c.PhoneCode,
+		&c.SignupMethods,
+		&c.HaveBoard,
+		&c.HasStates,
+		&c.IsVisible,
+		&c.CreatedAt,
+	)
+	return c, err
+}
+
 // ListVisible returns only countries marked as visible, ordered by title.
 func (r *CountryRepo) ListVisible(ctx context.Context) ([]domain.Country, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, country_code, title, phone_code, signup_methods,
-		       have_board, is_visible, created_at
-		FROM countries
-		WHERE is_visible = TRUE
-		ORDER BY title
-	`)
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+countrySelectCols+` FROM countries WHERE is_visible = TRUE ORDER BY title`)
 	if err != nil {
 		return nil, err
 	}
@@ -42,17 +56,8 @@ func (r *CountryRepo) ListVisible(ctx context.Context) ([]domain.Country, error)
 
 	var out []domain.Country
 	for rows.Next() {
-		var c domain.Country
-		if err := rows.Scan(
-			&c.ID,
-			&c.CountryCode,
-			&c.Title,
-			&c.PhoneCode,
-			&c.SignupMethods,
-			&c.HaveBoard,
-			&c.IsVisible,
-			&c.CreatedAt,
-		); err != nil {
+		c, err := scanCountry(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -62,12 +67,8 @@ func (r *CountryRepo) ListVisible(ctx context.Context) ([]domain.Country, error)
 
 // ListAll returns all countries (visible and hidden), ordered by title.
 func (r *CountryRepo) ListAll(ctx context.Context) ([]domain.Country, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, country_code, title, phone_code, signup_methods,
-		       have_board, is_visible, created_at
-		FROM countries
-		ORDER BY title
-	`)
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+countrySelectCols+` FROM countries ORDER BY title`)
 	if err != nil {
 		return nil, err
 	}
@@ -75,17 +76,8 @@ func (r *CountryRepo) ListAll(ctx context.Context) ([]domain.Country, error) {
 
 	var out []domain.Country
 	for rows.Next() {
-		var c domain.Country
-		if err := rows.Scan(
-			&c.ID,
-			&c.CountryCode,
-			&c.Title,
-			&c.PhoneCode,
-			&c.SignupMethods,
-			&c.HaveBoard,
-			&c.IsVisible,
-			&c.CreatedAt,
-		); err != nil {
+		c, err := scanCountry(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -97,9 +89,8 @@ func (r *CountryRepo) ListAll(ctx context.Context) ([]domain.Country, error) {
 func (r *CountryRepo) Create(ctx context.Context, in domain.CreateCountryInput) (domain.Country, error) {
 	// Prevent duplicates by country_code.
 	var dummy int
-	err := r.pool.QueryRow(ctx, `
-		SELECT 1 FROM countries WHERE country_code = $1
-	`, in.CountryCode).Scan(&dummy)
+	err := r.pool.QueryRow(ctx,
+		`SELECT 1 FROM countries WHERE country_code = $1`, in.CountryCode).Scan(&dummy)
 	if err == nil {
 		return domain.Country{}, ErrCountryConflict
 	}
@@ -111,32 +102,22 @@ func (r *CountryRepo) Create(ctx context.Context, in domain.CreateCountryInput) 
 	if signupMethods == nil {
 		signupMethods = []string{"email"}
 	}
-	var c domain.Country
-	err = r.pool.QueryRow(ctx, `
+	row := r.pool.QueryRow(ctx, `
 		INSERT INTO countries (
 			country_code, title, phone_code, signup_methods,
-			have_board, is_visible
+			have_board, has_states, is_visible
 		)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, country_code, title, phone_code, signup_methods,
-		          have_board, is_visible, created_at
-	`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING `+countrySelectCols,
 		in.CountryCode,
 		in.Title,
 		in.PhoneCode,
 		signupMethods,
 		in.HaveBoard,
+		in.HasStates,
 		in.IsVisible,
-	).Scan(
-		&c.ID,
-		&c.CountryCode,
-		&c.Title,
-		&c.PhoneCode,
-		&c.SignupMethods,
-		&c.HaveBoard,
-		&c.IsVisible,
-		&c.CreatedAt,
 	)
+	c, err := scanCountry(row)
 	if err != nil {
 		return domain.Country{}, err
 	}
@@ -150,35 +131,26 @@ func (r *CountryRepo) Update(ctx context.Context, id int64, in domain.UpdateCoun
 	if in.SignupMethods != nil {
 		signupMethodsArg = *in.SignupMethods
 	}
-	var c domain.Country
-	err := r.pool.QueryRow(ctx, `
+	row := r.pool.QueryRow(ctx, `
 		UPDATE countries
 		SET
-			title = COALESCE($2, title),
-			phone_code = COALESCE($3, phone_code),
+			title          = COALESCE($2, title),
+			phone_code     = COALESCE($3, phone_code),
 			signup_methods = COALESCE($4::text[], signup_methods),
-			have_board = COALESCE($5, have_board),
-			is_visible = COALESCE($6, is_visible)
+			have_board     = COALESCE($5, have_board),
+			has_states     = COALESCE($6, has_states),
+			is_visible     = COALESCE($7, is_visible)
 		WHERE id = $1
-		RETURNING id, country_code, title, phone_code, signup_methods,
-		          have_board, is_visible, created_at
-	`,
+		RETURNING `+countrySelectCols,
 		id,
 		in.Title,
 		in.PhoneCode,
 		signupMethodsArg,
 		in.HaveBoard,
+		in.HasStates,
 		in.IsVisible,
-	).Scan(
-		&c.ID,
-		&c.CountryCode,
-		&c.Title,
-		&c.PhoneCode,
-		&c.SignupMethods,
-		&c.HaveBoard,
-		&c.IsVisible,
-		&c.CreatedAt,
 	)
+	c, err := scanCountry(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Country{}, ErrCountryNotFound
@@ -187,4 +159,3 @@ func (r *CountryRepo) Update(ctx context.Context, id int64, in domain.UpdateCoun
 	}
 	return c, nil
 }
-

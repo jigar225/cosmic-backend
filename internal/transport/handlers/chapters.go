@@ -100,6 +100,11 @@ func (h *Handlers) CreateChapter(c *fiber.Ctx) error {
 		FilePath:     key,
 		IsVisible:    true,
 	}
+	if orderStr := strings.TrimSpace(strings.Join(form.Value["display_order"], "")); orderStr != "" {
+		if orderVal, err := strconv.Atoi(orderStr); err == nil && orderVal >= 0 {
+			in.DisplayOrder = &orderVal
+		}
+	}
 	ch, err := h.ChapterRepo.Create(c.Context(), in)
 	if err != nil {
 		log.Printf("chapters create: db insert: %v", err)
@@ -107,6 +112,94 @@ func (h *Handlers) CreateChapter(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"chapter": ch})
+}
+
+// UpdateChapterPdf handles PATCH /admin/chapters/:id (multipart: file).
+// Replaces the chapter PDF in S3 and updates the file_path in the DB.
+func (h *Handlers) UpdateChapterPdf(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid chapter id"})
+	}
+
+	// Fetch chapter to get book_id for the S3 key.
+	ch, err := h.ChapterRepo.GetByID(c.Context(), id)
+	if err != nil {
+		if errors.Is(err, repository.ErrChapterNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "chapter not found"})
+		}
+		log.Printf("chapters update-pdf: get chapter: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to get chapter"})
+	}
+
+	form, err := c.MultipartForm()
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid multipart form"})
+	}
+
+	files := form.File["file"]
+	if len(files) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "file is required (PDF)"})
+	}
+	fileHeader := files[0]
+	if fileHeader.Size > maxChapterPDFSize {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "file too large (max 50MB)"})
+	}
+
+	filename := strings.ToLower(fileHeader.Filename)
+	ct := fileHeader.Header.Get("Content-Type")
+	if !strings.HasSuffix(filename, ".pdf") && ct != pdfContentType {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "file must be a PDF"})
+	}
+
+	if h.S3Uploader == nil || h.S3Uploader.Bucket() == "" {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "file storage (S3) is not configured"})
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		log.Printf("chapters update-pdf: open file: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read file"})
+	}
+	defer file.Close()
+
+	size := fileHeader.Size
+	limitedBody := io.LimitReader(file, size)
+
+	key := "chapters/" + strconv.FormatInt(ch.BookID, 10) + "/" + uuid.New().String() + ".pdf"
+	if err := h.S3Uploader.Upload(c.Context(), key, pdfContentType, limitedBody, size); err != nil {
+		log.Printf("chapters update-pdf: s3 upload: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to upload file to storage"})
+	}
+
+	updated, err := h.ChapterRepo.UpdateFilePath(c.Context(), id, key)
+	if err != nil {
+		log.Printf("chapters update-pdf: db update: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update chapter"})
+	}
+
+	return c.JSON(fiber.Map{"chapter": updated})
+}
+
+// DeleteChapter handles DELETE /admin/chapters/:id.
+func (h *Handlers) DeleteChapter(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid chapter id"})
+	}
+	if err := h.ChapterRepo.Delete(c.Context(), id); err != nil {
+		if errors.Is(err, repository.ErrChapterNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "chapter not found"})
+		}
+		if errors.Is(err, repository.ErrChapterHasDependents) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "chapter cannot be deleted: it has generated content"})
+		}
+		log.Printf("chapters delete: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete chapter"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // GetChapterDownloadURL handles GET /admin/chapters/:id/download-url.

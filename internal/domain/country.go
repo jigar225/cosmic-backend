@@ -11,6 +11,7 @@ type Country struct {
 	PhoneCode     *string   `json:"phone_code,omitempty"`
 	SignupMethods []string  `json:"signup_methods"`
 	HaveBoard     bool      `json:"have_board"`
+	HasStates     bool      `json:"has_states"`
 	IsVisible     bool      `json:"is_visible"`
 	CreatedAt     time.Time `json:"created_at"`
 }
@@ -23,16 +24,18 @@ type CreateCountryInput struct {
 	PhoneCode     *string  `json:"phone_code,omitempty"`
 	SignupMethods []string `json:"signup_methods"`
 	HaveBoard     bool     `json:"have_board"`
+	HasStates     bool     `json:"has_states"`
 	IsVisible     bool     `json:"is_visible"`
 }
 
 // UpdateCountryInput is the payload for partially updating a country.
 // All fields are optional; only non-nil pointers are applied.
 type UpdateCountryInput struct {
-	Title         *string  `json:"title,omitempty"`
-	PhoneCode     *string  `json:"phone_code,omitempty"`
+	Title         *string   `json:"title,omitempty"`
+	PhoneCode     *string   `json:"phone_code,omitempty"`
 	SignupMethods *[]string `json:"signup_methods,omitempty"`
-	HaveBoard     *bool    `json:"have_board,omitempty"`
-	IsVisible     *bool    `json:"is_visible,omitempty"`
+	HaveBoard     *bool     `json:"have_board,omitempty"`
+	HasStates     *bool     `json:"has_states,omitempty"`
+	IsVisible     *bool     `json:"is_visible,omitempty"`
 }
 

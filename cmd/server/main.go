@@ -50,6 +50,7 @@ func main() {
 		SubjectRepo:      repository.NewSubjectRepo(pool),
 		BookRepo:         repository.NewBookRepo(pool),
 		ChapterRepo:      repository.NewChapterRepo(pool),
+		ProgressRepo:     repository.NewProgressRepo(pool),
 		S3Uploader:       s3Uploader,
 		UserRepo:         repository.NewUserRepo(pool),
 		RefreshTokenRepo: repository.NewRefreshTokenRepo(pool),
